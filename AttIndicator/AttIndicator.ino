@@ -3,35 +3,6 @@
   MuTong233's [*] code
   Using Arduino IDE cuz i'm lazy to learn uVision :cool:
 
-  TODO: Move out this section to the README.md file
-  TODO: And add an simplified version of the README here.
-
-  Board Information:
-  STM32F103C8T6 with 64K Space and Some External Devices
-  https://components101.com/microcontrollers/stm32f103c8t8-blue-pill-development-board
-
-  Project GensouRTOS:
-  Welcome to the GensouRTOS Develop Environment!
-  Basically I'm designing a full-state acceptable system w/redundancy support :)
-  And all of the system design must fit in a 64k flash space.
-  GensouRTOS is NOT an RTOS or an Operation System.
-  It's just a code framework for myself. By using the framework I can tweak the system
-  into many creative projects like this one or other code that I wrote.
-  The basic development idea is to create a reusable, error-recoverable, user-friendly,
-  easy-to-copy code framework for my all projects that based on minimal hardware
-  like STM32F103C8T6 or RP2040 based system.
-
-  Why not FreeRTOS:
-  Yeah, FreeRTOS is a much better idea. But when you are actually developing on the bare
-  metal, for myself, my first idea is why not use my knowledge learned from 8051, that's
-  why I want to program directly on the bare metal. It's funny, though it may not be the
-  best solution ever created, it won't run so fast, won't run so smooth. But all code I
-  wrote is an valuable experience for myself.
-
-  Special Thanks to:
-  Adafruit, Erick Simoes, Piotr Stolarz and STM32duino community and all library providers!
-  Without those effort, the project can't develop as smooth as possible.
-
   The code is distributed under the GNU GPL-3.0-or-later open-source license.
   You may or already used the code, but when used, you must publish modified code as-is.
 
@@ -84,7 +55,7 @@
 #define TFT_MOSI PA8
 #define US_TRIG PB8
 #define US_ECHO PB9
-#define LEDPort PC13
+#define LED0 PC13
 
 // The GensouRTOS Runtime version, also represent as the Application version.
 // Used for OTA Update and other various ways.
@@ -103,8 +74,10 @@ Ultrasonic ultrasonic(US_TRIG, US_ECHO);
 
 // Global Variants
 unsigned int osAppX = 0;
+unsigned int osAppN = 2;
 unsigned int osState = 0;
 unsigned int osIdleTime = 1000;
+unsigned int keyInput = 0;
 bool osAbleToRun = false;
 bool osPrevHasErr = false;
 unsigned int distance;
@@ -236,6 +209,12 @@ int doSensorCheck()
   return 0;
 }
 
+void doSensorDataAnalyze()
+{
+  // TODO: Based on MPU6050 Data, calculate possible attitude and climb rate etc.
+  // TODO: Need real hardware testing, waiting for board arrival.
+}
+
 // System Info Serial Output
 void doSystemInfoS()
 {
@@ -325,11 +304,8 @@ extern "C" void proc_worker(void *arg)
 {
   while (1)
   {
-    // Hello
-    // TODO: All sensor related things should be finished here as it has the major priority to do.
-    // TODO: Error and Special State handler should be finished here.
-    // TODO: Actually I changed the idea, let us create another thread for error handler.
-    doSensorUpdate(0); // This is enough :) we have successfully detached all data processing from the serial output.
+    doSensorUpdate(0);
+    doSensorDataAnalyze();
   }
 }
 
@@ -345,17 +321,17 @@ extern "C" void proc_systemui(void *arg)
     tft.fillScreen(ST77XX_BLACK);
     doSensorValueS();
     testdrawtext("System UI under construction, Please use Serial to control this device. Serial started with TX on PA9, RX on PA10, Baud Rate 9600", ST77XX_WHITE);
-    coop_idle(1000);
+    coop_idle(osIdleTime);
     tft.fillScreen(ST77XX_BLACK);
     doSensorValueS();
     testdrawtext("This display is supposed to have data monitor, data is coming from the sensor.", ST77XX_WHITE);
     coop_yield();
-    coop_idle(1000);
+    coop_idle(osIdleTime);
     mediabuttons();
     doSensorValueS();
     testdrawtext("This is an object test", ST77XX_WHITE);
     coop_yield();
-    coop_idle(1000);
+    coop_idle(osIdleTime);
   }
 }
 
@@ -364,13 +340,12 @@ extern "C" void proc_input(void *arg)
 {
   while (1)
   {
-    // TODO: All key response handler should be handled here.
-    // TODO: This thread should not print out any debug information.
-    // TODO: Data should be sent out from this thread and this thread should only
-    // TODO: receive key events or related input events.
-    // Oi
-    coop_yield();
-    coop_idle(100);
+    // TODO: Verify this actually works on real hardware.
+    (digitalRead(KEY1) == 1) ? keyInput = keyInput | 0x01 : keyInput = keyInput & 0x0e;
+    (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
+    (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
+    (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
+    coop_idle(5);
   }
 }
 
@@ -383,7 +358,6 @@ extern "C" void proc_serial(void *arg)
     // TODO: This thread should handle all of the serial communication.
     // TODO: Any serial data receiving or sending should be finished in this thread.
     // TODO: It should use less hardware interrupt as it may disrupt the system working.
-    coop_yield();
     // Below Section is for Serial Communication.
     while (Serial.available() > 0)
     {
@@ -412,12 +386,14 @@ extern "C" void proc_serial(void *arg)
         case str2int("ENUM"):
           doSystemInfoS();
           break;
-        case str2int("WORK"):
+        case str2int("PANIC"):
           Serial.println("OK");
-          osAbleToRun = !osAbleToRun;
+          osAbleToRun = false;
+          osState = 255;
+          osPrevHasErr = true;
           break;
         case str2int("PROG"):
-          if (osAppX < 7)
+          if (osAppX < osAppN)
           {
             Serial.println("OK");
             osAppX++;
@@ -435,7 +411,7 @@ extern "C" void proc_serial(void *arg)
         case str2int("HELP"):
           Serial.println("You may use Available Commands:");
           Serial.println("ENUM - Show System Information");
-          Serial.println("WORK - Change Working State");
+          Serial.println("PANIC - Make a system panic");
           Serial.println("PROG - Change Active Application");
           Serial.println("RESET - Reset the system");
           doSystemVersionS();
@@ -487,7 +463,7 @@ int doSystemTest()
 {
   // TODO: Finish the system test to make sure it only includes necessary tests.
   // TODO: And make sure the system integrity test can be finished within 1 minute.
-  /* Print out the values */
+
   doSensorUpdate(0);
   doSensorValueS();
   delay(500);
@@ -501,7 +477,7 @@ int doSystemTest()
 
   // large block of text
   tft.fillScreen(ST77XX_BLACK);
-  testdrawtext("This is a block of text test why the fuck original version takes a fucking long string that will make the flash full ok never mind it doesn't matter still getting fucked by space", ST77XX_WHITE);
+  testdrawtext("This is a block of text test why the fuck original version takes a freaking long string that will make the flash full ok never mind it doesn't matter still getting f-ed by space", ST77XX_WHITE);
   delay(1000);
 
   // tft print function!
@@ -558,12 +534,13 @@ void setup()
   Serial.println("Early console at PA9 and PA10 with 9600 baud rate.");
   Serial.println("[ DEVICE INITIALIZE START ]");
   Serial.println("Setting basic Ports...");
-  // TODO: Initialize all ports include SPI and I2C interface.
-  pinMode(LEDPort, OUTPUT);
+  // Digital Pins Initialization, only key input and LED should be initialized.
+  pinMode(LED0, OUTPUT);
   pinMode(KEY1, INPUT);
   pinMode(KEY2, INPUT);
   pinMode(KEY3, INPUT);
   pinMode(KEY4, INPUT);
+  digitalWrite(LED0, LOW); // Indicate the system is working now
   // Early LCD Initialization
   Serial.println("Initializing LCD Device...");
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here

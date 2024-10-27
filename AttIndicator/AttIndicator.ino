@@ -15,7 +15,7 @@
 // Multithread Configuration
 #include <coop_threads.h>
 #define CONFIG_IDLE_CB_ALT
-#define THREAD_STACK_SIZE 0x200U // Use 0x200U as the stack size for STM32F1
+#define THREAD_STACK_SIZE 0x200U // Use 0x100U as the stack size for STM32F1
 #define CONFIG_MAX_THREADS 6     // Increase some number for better event handling
 // May reduce RAM usage...? But we have plenty of RAM anyway
 // #define CONFIG_NOEXIT_STATIC_THREADS 1
@@ -45,11 +45,12 @@
 #define KEY2 PA5
 #define KEY3 PA6
 #define KEY4 PA7
-#define TFT_SCLK PB3
-#define TFT_CS PA15
-#define TFT_RST PA3
-#define TFT_DC PA2
-#define TFT_MOSI PB5
+#define TFT_SCLK PB13
+#define TFT_CS PB12
+#define TFT_RST PB3
+#define TFT_DC PB4
+#define TFT_MOSI PB15
+#define TFT_BLK PB5
 #define US_TRIG PA0
 #define US_ECHO PA1
 #define LED0 PC13
@@ -67,10 +68,12 @@
 
 // Device Structure build
 // ESP8266 Network Software Serial Connection
+SoftwareSerial SerialAPI(SYS_RX, SYS_TX);
 SoftwareSerial osNetSerial(ESP_RX, ESP_TX);
 // For ST7735-based displays, we will use this call
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
-Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
+SPIClass SPI_2(PB15,PB14,PB13);
+Adafruit_ST7735 tft = Adafruit_ST7735(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
 // MPU6050 sensor uses I2C to communicate with the board
 // I2C use device number based detection, make sure I2C hardware port is reserved!
 Adafruit_MPU6050 mpu;
@@ -81,7 +84,7 @@ Ultrasonic ultrasonic(US_TRIG, US_ECHO);
 unsigned int osAppX = 0;
 unsigned int osAppN = 2;
 unsigned int osState = 0;
-unsigned int osIdleTime = 1000;
+unsigned int osIdleTime = 10000;
 unsigned int keyInput = 0;
 bool osAbleToRun = false;
 bool osPrevHasErr = false;
@@ -203,7 +206,7 @@ void doSensorUpdate(int sta)
     distance = ultrasonic.read();
     break;
   default:
-    Serial.println("Invalid data passed into the sensor updater.");
+    SerialAPI.println("Invalid data passed into the sensor updater.");
   }
 }
 
@@ -224,64 +227,64 @@ void doSensorDataAnalyze()
 void doSystemInfoS()
 {
   // TODO: Finish the configuration data structure.
-  Serial.println("Current Configuration:");
-  Serial.print("System Working: ");
-  Serial.println(osAbleToRun);
-  Serial.print("Filter bandwidth set to: ");
+  SerialAPI.println("Current Configuration:");
+  SerialAPI.print("System Working: ");
+  SerialAPI.println(osAbleToRun);
+  SerialAPI.print("Filter bandwidth set to: ");
   switch (mpu.getFilterBandwidth())
   {
   case MPU6050_BAND_260_HZ:
-    Serial.println("260 Hz");
+    SerialAPI.println("260 Hz");
     break;
   case MPU6050_BAND_184_HZ:
-    Serial.println("184 Hz");
+    SerialAPI.println("184 Hz");
     break;
   case MPU6050_BAND_94_HZ:
-    Serial.println("94 Hz");
+    SerialAPI.println("94 Hz");
     break;
   case MPU6050_BAND_44_HZ:
-    Serial.println("44 Hz");
+    SerialAPI.println("44 Hz");
     break;
   case MPU6050_BAND_21_HZ:
-    Serial.println("21 Hz");
+    SerialAPI.println("21 Hz");
     break;
   case MPU6050_BAND_10_HZ:
-    Serial.println("10 Hz");
+    SerialAPI.println("10 Hz");
     break;
   case MPU6050_BAND_5_HZ:
-    Serial.println("5 Hz");
+    SerialAPI.println("5 Hz");
     break;
   }
-  Serial.print("Gyro range set to: ");
+  SerialAPI.print("Gyro range set to: ");
   switch (mpu.getGyroRange())
   {
   case MPU6050_RANGE_250_DEG:
-    Serial.println("+- 250 deg/s");
+    SerialAPI.println("+- 250 deg/s");
     break;
   case MPU6050_RANGE_500_DEG:
-    Serial.println("+- 500 deg/s");
+    SerialAPI.println("+- 500 deg/s");
     break;
   case MPU6050_RANGE_1000_DEG:
-    Serial.println("+- 1000 deg/s");
+    SerialAPI.println("+- 1000 deg/s");
     break;
   case MPU6050_RANGE_2000_DEG:
-    Serial.println("+- 2000 deg/s");
+    SerialAPI.println("+- 2000 deg/s");
     break;
   }
-  Serial.print("Accelerometer range set to: ");
+  SerialAPI.print("Accelerometer range set to: ");
   switch (mpu.getAccelerometerRange())
   {
   case MPU6050_RANGE_2_G:
-    Serial.println("+-2G");
+    SerialAPI.println("+-2G");
     break;
   case MPU6050_RANGE_4_G:
-    Serial.println("+-4G");
+    SerialAPI.println("+-4G");
     break;
   case MPU6050_RANGE_8_G:
-    Serial.println("+-8G");
+    SerialAPI.println("+-8G");
     break;
   case MPU6050_RANGE_16_G:
-    Serial.println("+-16G");
+    SerialAPI.println("+-16G");
     break;
   }
 }
@@ -289,8 +292,8 @@ void doSystemInfoS()
 // Version Info Serial Output
 void doSystemVersionS()
 {
-  Serial.print("STM32duino GensouRTOS ");
-  Serial.println(OSVER);
+  SerialAPI.print("STM32duino GensouRTOS ");
+  SerialAPI.println(OSVER);
 }
 
 /* Application Main Threads Programming
@@ -304,8 +307,7 @@ extern "C" void proc_worker(void *arg)
   while (1)
   {
     doSensorUpdate(0);
-    doSensorDataAnalyze();
-    coop_idle(20);
+    coop_idle(500);
   }
 }
 
@@ -345,7 +347,7 @@ extern "C" void proc_input(void *arg)
     (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
     (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
     (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
-    coop_idle(20);
+    coop_idle(500);
   }
 }
 
@@ -359,10 +361,11 @@ extern "C" void proc_serial(void *arg)
     // TODO: Any serial data receiving or sending should be finished in this thread.
     // TODO: It should use less hardware interrupt as it may disrupt the system working.
     // Below Section is for USB Serial Communication.
-    while (Serial.available() > 0)
+    coop_idle(500);
+    while (SerialAPI.available() > 0)
     {
       // Create a place to hold the incoming message
-      int inChar = Serial.read();
+      int inChar = SerialAPI.read();
 
       if (inChar == '\n')
       {
@@ -374,7 +377,7 @@ extern "C" void proc_serial(void *arg)
         }
         else if (inString == "PANIC")
         {
-          Serial.println("OK");
+          SerialAPI.println("OK");
           osAbleToRun = false;
           osState = 255;
           osPrevHasErr = true;
@@ -383,34 +386,38 @@ extern "C" void proc_serial(void *arg)
         {
           if (osAppX < osAppN)
           {
-            Serial.println("OK");
+            SerialAPI.println("OK");
             osAppX++;
           }
           else
           {
             osAppX = 0;
-            Serial.println("OK");
+            SerialAPI.println("OK");
           }
         }
         else if (inString == "RESET")
         {
-          Serial.println("Resetting Default Settings");
+          SerialAPI.println("Resetting Default Settings");
           doSystemReset();
         }
         else if (inString == "HELP")
         {
-          Serial.println("You may use Available Commands:");
-          Serial.println("ENUM - Show System Information");
-          Serial.println("PANIC - Make a system panic");
-          Serial.println("PROG - Change Active Application");
-          Serial.println("RESET - Reset the system");
+          SerialAPI.println("You may use Available Commands:");
+          SerialAPI.println("ENUM - Show System Information");
+          SerialAPI.println("PANIC - Make a system panic");
+          SerialAPI.println("PROG - Change Active Application");
+          SerialAPI.println("RESET - Reset the system");
           doSystemVersionS();
+        }
+        else if (inString == "READ")
+        {
+          doSensorValueS();
         }
         else
         {
-          Serial.print("[Serial] Unknown Command: ");
-          Serial.print(inString);
-          Serial.println(".");
+          SerialAPI.print("[Serial] Unknown Command: ");
+          SerialAPI.print(inString);
+          SerialAPI.println(".");
         }
         inString = ""; // Clear buffer
       }
@@ -438,29 +445,29 @@ extern "C" void proc_network(void *arg)
 // Sensor Value Serial Output
 void doSensorValueS()
 {
-  Serial.print("Acceleration X: ");
-  Serial.print(mpuacclx);
-  Serial.print(", Y: ");
-  Serial.print(mpuaccly);
-  Serial.print(", Z: ");
-  Serial.print(mpuacclz);
-  Serial.println(" m/s^2");
+  SerialAPI.print("Acceleration X: ");
+  SerialAPI.print(mpuacclx);
+  SerialAPI.print(", Y: ");
+  SerialAPI.print(mpuaccly);
+  SerialAPI.print(", Z: ");
+  SerialAPI.print(mpuacclz);
+  SerialAPI.println(" m/s^2");
 
-  Serial.print("Rotation X: ");
-  Serial.print(mpugyrox);
-  Serial.print(", Y: ");
-  Serial.print(mpugyroy);
-  Serial.print(", Z: ");
-  Serial.print(mpugyroz);
-  Serial.println(" rad/s");
+  SerialAPI.print("Rotation X: ");
+  SerialAPI.print(mpugyrox);
+  SerialAPI.print(", Y: ");
+  SerialAPI.print(mpugyroy);
+  SerialAPI.print(", Z: ");
+  SerialAPI.print(mpugyroz);
+  SerialAPI.println(" rad/s");
 
-  Serial.print("Temperature: ");
-  Serial.print(mputempc);
-  Serial.println(" degC");
+  SerialAPI.print("Temperature: ");
+  SerialAPI.print(mputempc);
+  SerialAPI.println(" degC");
 
-  Serial.print("Obstacle Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
+  SerialAPI.print("Obstacle Distance: ");
+  SerialAPI.print(distance);
+  SerialAPI.println(" cm");
 }
 
 int doSystemTest()
@@ -475,8 +482,8 @@ int doSystemTest()
   uint16_t time = millis();
   tft.fillScreen(ST77XX_BLACK);
   time = millis() - time;
-
-  Serial.println(time, DEC);
+  SerialAPI.print("draw function take time: ");
+  SerialAPI.println(time, DEC);
   delay(500);
 
   // large block of text
@@ -520,7 +527,7 @@ int doSystemTest()
   mediabuttons();
   delay(500);
 
-  Serial.println("System test done.");
+  SerialAPI.println("System test done.");
   delay(1000);
 
   return 0;
@@ -532,12 +539,10 @@ void setup()
   // Initialize Serial Communication
   // This should be fixed port for Tx1/Rx1(PA9/PA10).
   // ESP8266 Software serial will be initialized after system test and have a check.
-  Serial.setRx(SYS_RX);
-  Serial.setTx(SYS_TX);
-  Serial.begin(SYSBAUD);
-  Serial.println("Early console at PA9 and PA10 with 9600 baud rate.");
-  Serial.println("[ DEVICE INITIALIZE START ]");
-  Serial.println("Setting basic Ports...");
+  SerialAPI.begin(SYSBAUD);
+  SerialAPI.println("Early console at PA9 and PA10 with 9600 baud rate.");
+  SerialAPI.println("[ DEVICE INITIALIZE START ]");
+  SerialAPI.println("Setting basic Ports...");
   // Digital Pins Initialization, only key input and LED should be initialized.
   pinMode(LED0, OUTPUT);
   pinMode(KEY1, INPUT);
@@ -546,7 +551,7 @@ void setup()
   pinMode(KEY4, INPUT);
   digitalWrite(LED0, LOW); // Indicate the system is working now
   // Early LCD Initialization
-  Serial.println("Initializing LCD Device...");
+  SerialAPI.println("Initializing LCD Device...");
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
   // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
   // may end up with a black screen some times, or all the time.
@@ -554,13 +559,13 @@ void setup()
   tft.initR(INITR_144GREENTAB); // Initialize 1.44 inch TFT screen with ST7735
   // TODO: Make a simple bootloader splash screen here, instead of boring serial outputs.
   // MPU6050 Sensor communication establish
-  Serial.println("Searching MPU6050...");
+  SerialAPI.println("Searching MPU6050...");
   delay(10); // Wait for I2C stabilize
   if (!mpu.begin())
   {
     // The MPU6050 connection should be established with an address of 0x68
     // If not established, tell the user system is not available to use.
-    Serial.println("[ ERROR ] No MPU6050 Device found!");
+    SerialAPI.println("[ ERROR ] No MPU6050 Device found!");
     while (1)
     {
       // TODO: Since the TFT Display is initialized, we can display some kind of error code here.
@@ -568,12 +573,12 @@ void setup()
     }
   }
   // If everything is ok, load the basic system parameter and roll out the setup phase.
-  Serial.println("MPU6050 Communication OK.");
-  Serial.println("Loading System Parameters...");
+  SerialAPI.println("MPU6050 Communication OK.");
+  SerialAPI.println("Loading System Parameters...");
   doSystemReset();
-  Serial.println("[ DEVICE INITIALIZE FINISH ]");
-  Serial.println("Code by MuTong233 at https://mygensou.net/ All rights reserved.");
-  Serial.println("[ EARLY SYSTEM BOOTLOADER FINISH ]");
+  SerialAPI.println("[ DEVICE INITIALIZE FINISH ]");
+  SerialAPI.println("Code by MuTong233 at https://mygensou.net/ All rights reserved.");
+  SerialAPI.println("[ EARLY SYSTEM BOOTLOADER FINISH ]");
 }
 
 // Main code here, to run repeatedly:
@@ -582,7 +587,7 @@ void loop()
   // Now we are in the GensouRTOS environment, we need to do some preparation to start system.
   // Print out the build info and test the system to ensure it meets the standard condition.
   // When in production, reduce non-necessary test phase to save time and space.
-  Serial.println("[ SYSTEM TEST IN PROGRESS ]");
+  SerialAPI.println("[ SYSTEM TEST IN PROGRESS ]");
   doSystemVersionS();
   if (!osPrevHasErr)
   {
@@ -592,8 +597,8 @@ void loop()
   }
   else
   {
-    Serial.println("System has a previous error detected.");
-    Serial.println("If an error code is set, should be reported here.");
+    SerialAPI.println("System has a previous error detected.");
+    SerialAPI.println("If an error code is set, should be reported here.");
     // If a programming bug found, there will be no error code but error bit is set.
     // In this situation, code exectution should be stop to prevent fault.
     osAbleToRun = false;
@@ -604,22 +609,25 @@ void loop()
   if (osState != 0)
   {
     // TODO: Print out the error code on the screen.
-    Serial.print("System Test failed with an error code ");
-    Serial.println(osState);
+    SerialAPI.print("System Test failed with an error code ");
+    SerialAPI.println(osState);
     // In case of an hardware-attack, set the execution bit to false.
     osAbleToRun = false;
-    Serial.println("[ SYSTEM HALTED ]");
+    SerialAPI.println("[ SYSTEM HALTED ]");
     while (1)
     {
       delay(10);
     }
   }
-  Serial.println("System Test successfully completed.");
-  // Serial.println("Initializing Network Connection...");
-  // osNetSerial.begin(OSBAUD);
-  // Serial.println("Initialized.");
+  SerialAPI.println("System Test successfully completed.");
+  // SerialAPI.println("Initializing Network Connection...");
+  // osNetSerialAPI.begin(OSBAUD);
+  // SerialAPI.println("Initialized.");
   // TODO: Network connection check.
-  Serial.println("[ MULTI THREAD CODE EXECUTION ]");
+  SerialAPI.println("[ MULTI THREAD CODE EXECUTION ]");
+  uint16_t time = millis();
+  SerialAPI.print("System uptime: ");
+  SerialAPI.println(time, DEC);
   osAbleToRun = true;
   if (osAbleToRun)
   {
@@ -634,9 +642,9 @@ void loop()
     coop_sched_service();
     // Normally those threads won't exit because they are running in a loop.
     // If there is a problem, the system must tell user there is something wrong.
-    Serial.println("[ CODE EXECUTION TERMINATED ]");
+    SerialAPI.println("[ CODE EXECUTION TERMINATED ]");
   }
-  Serial.println("[ RESTARTING IN PROGRESS ]");
+  SerialAPI.println("[ RESTARTING IN PROGRESS ]");
 }
 
 /*

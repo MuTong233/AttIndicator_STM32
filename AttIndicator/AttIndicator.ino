@@ -68,11 +68,10 @@
 
 // Device Structure build
 // ESP8266 Network Software Serial Connection
-SoftwareSerial SerialAPI(SYS_RX, SYS_TX);
 SoftwareSerial osNetSerial(ESP_RX, ESP_TX);
 // For ST7735-based displays, we will use this call
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
-SPIClass SPI_2(PB15,PB14,PB13);
+SPIClass SPI_2(PB15, PB14, PB13);
 Adafruit_ST7735 tft = Adafruit_ST7735(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
 // MPU6050 sensor uses I2C to communicate with the board
 // I2C use device number based detection, make sure I2C hardware port is reserved!
@@ -206,7 +205,7 @@ void doSensorUpdate(int sta)
     distance = ultrasonic.read();
     break;
   default:
-    SerialAPI.println("Invalid data passed into the sensor updater.");
+    Serial.println("Invalid data passed into the sensor updater.");
   }
 }
 
@@ -227,64 +226,64 @@ void doSensorDataAnalyze()
 void doSystemInfoS()
 {
   // TODO: Finish the configuration data structure.
-  SerialAPI.println("Current Configuration:");
-  SerialAPI.print("System Working: ");
-  SerialAPI.println(osAbleToRun);
-  SerialAPI.print("Filter bandwidth set to: ");
+  Serial.println("Current Configuration:");
+  Serial.print("System Working: ");
+  Serial.println(osAbleToRun);
+  Serial.print("Filter bandwidth set to: ");
   switch (mpu.getFilterBandwidth())
   {
   case MPU6050_BAND_260_HZ:
-    SerialAPI.println("260 Hz");
+    Serial.println("260 Hz");
     break;
   case MPU6050_BAND_184_HZ:
-    SerialAPI.println("184 Hz");
+    Serial.println("184 Hz");
     break;
   case MPU6050_BAND_94_HZ:
-    SerialAPI.println("94 Hz");
+    Serial.println("94 Hz");
     break;
   case MPU6050_BAND_44_HZ:
-    SerialAPI.println("44 Hz");
+    Serial.println("44 Hz");
     break;
   case MPU6050_BAND_21_HZ:
-    SerialAPI.println("21 Hz");
+    Serial.println("21 Hz");
     break;
   case MPU6050_BAND_10_HZ:
-    SerialAPI.println("10 Hz");
+    Serial.println("10 Hz");
     break;
   case MPU6050_BAND_5_HZ:
-    SerialAPI.println("5 Hz");
+    Serial.println("5 Hz");
     break;
   }
-  SerialAPI.print("Gyro range set to: ");
+  Serial.print("Gyro range set to: ");
   switch (mpu.getGyroRange())
   {
   case MPU6050_RANGE_250_DEG:
-    SerialAPI.println("+- 250 deg/s");
+    Serial.println("+- 250 deg/s");
     break;
   case MPU6050_RANGE_500_DEG:
-    SerialAPI.println("+- 500 deg/s");
+    Serial.println("+- 500 deg/s");
     break;
   case MPU6050_RANGE_1000_DEG:
-    SerialAPI.println("+- 1000 deg/s");
+    Serial.println("+- 1000 deg/s");
     break;
   case MPU6050_RANGE_2000_DEG:
-    SerialAPI.println("+- 2000 deg/s");
+    Serial.println("+- 2000 deg/s");
     break;
   }
-  SerialAPI.print("Accelerometer range set to: ");
+  Serial.print("Accelerometer range set to: ");
   switch (mpu.getAccelerometerRange())
   {
   case MPU6050_RANGE_2_G:
-    SerialAPI.println("+-2G");
+    Serial.println("+-2G");
     break;
   case MPU6050_RANGE_4_G:
-    SerialAPI.println("+-4G");
+    Serial.println("+-4G");
     break;
   case MPU6050_RANGE_8_G:
-    SerialAPI.println("+-8G");
+    Serial.println("+-8G");
     break;
   case MPU6050_RANGE_16_G:
-    SerialAPI.println("+-16G");
+    Serial.println("+-16G");
     break;
   }
 }
@@ -292,8 +291,8 @@ void doSystemInfoS()
 // Version Info Serial Output
 void doSystemVersionS()
 {
-  SerialAPI.print("STM32duino GensouRTOS ");
-  SerialAPI.println(OSVER);
+  Serial.print("STM32duino GensouRTOS ");
+  Serial.println(OSVER);
 }
 
 /* Application Main Threads Programming
@@ -304,128 +303,99 @@ void doSystemVersionS()
 // Thread 1: Main Worker for all computing related things
 extern "C" void proc_worker(void *arg)
 {
-  while (1)
-  {
-    doSensorUpdate(0);
-    coop_idle(500);
-  }
+  doSensorUpdate(0);
 }
 
 // Thread 2: System UI handler for all display output things
 extern "C" void proc_systemui(void *arg)
 {
-  while (1)
-  {
-    // TODO: Make a user-friendly interface for end-user to use.
-    // TODO: This section should only handle TFT Output, or status detection.
-    // TODO: Input handler should be only handled in its belonged thread.
-    // TODO: Like Serial thread or Input thread.
-    tft.fillScreen(ST77XX_BLACK);
-    doSensorValueS();
-    testdrawtext("System UI under construction, Please use Serial to control this device. Serial started with TX on PA9, RX on PA10, Baud Rate 9600", ST77XX_WHITE);
-    coop_idle(osIdleTime);
-    tft.fillScreen(ST77XX_BLACK);
-    doSensorValueS();
-    testdrawtext("This display is supposed to have data monitor, data is coming from the sensor.", ST77XX_WHITE);
-    coop_yield();
-    coop_idle(osIdleTime);
-    mediabuttons();
-    doSensorValueS();
-    testdrawtext("This is an object test", ST77XX_WHITE);
-    coop_yield();
-    coop_idle(osIdleTime);
-  }
+  // TODO: Make a user-friendly interface for end-user to use.
+  // TODO: This section should only handle TFT Output, or status detection.
+  // TODO: Input handler should be only handled in its belonged thread.
+  // TODO: Like Serial thread or Input thread.
+  testdrawtext("System UI under construction, Please use Serial to control this device. Serial started with TX on PA9, RX on PA10, Baud Rate 9600", ST77XX_WHITE);
 }
 
 // Thread 3: Input event handler
 extern "C" void proc_input(void *arg)
 {
-  while (1)
-  {
-    // TODO: Verify this actually works on real hardware.
-    (digitalRead(KEY1) == 1) ? keyInput = keyInput | 0x01 : keyInput = keyInput & 0x0e;
-    (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
-    (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
-    (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
-    coop_idle(500);
-  }
+  (digitalRead(KEY1) == 1) ? keyInput = keyInput | 0x01 : keyInput = keyInput & 0x0e;
+  (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
+  (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
+  (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
 }
 
 // Thread 4: Serial Communication handler
 extern "C" void proc_serial(void *arg)
 {
-  while (1)
+  // Ciallo
+  // TODO: This thread should handle all of the serial communication.
+  // TODO: Any serial data receiving or sending should be finished in this thread.
+  // TODO: It should use less hardware interrupt as it may disrupt the system working.
+  // Below Section is for USB Serial Communication.
+  while (Serial.available() > 0)
   {
-    // Ciallo
-    // TODO: This thread should handle all of the serial communication.
-    // TODO: Any serial data receiving or sending should be finished in this thread.
-    // TODO: It should use less hardware interrupt as it may disrupt the system working.
-    // Below Section is for USB Serial Communication.
-    coop_idle(500);
-    while (SerialAPI.available() > 0)
-    {
-      // Create a place to hold the incoming message
-      int inChar = SerialAPI.read();
+    // Create a place to hold the incoming message
+    int inChar = Serial.read();
 
-      if (inChar == '\n')
+    if (inChar == '\n')
+    {
+      // If full message received...
+      // Check the message and do things.
+      if (inString == "ENUM")
       {
-        // If full message received...
-        // Check the message and do things.
-        if (inString == "ENUM")
+        doSystemInfoS();
+      }
+      else if (inString == "PANIC")
+      {
+        Serial.println("OK");
+        osAbleToRun = false;
+        osState = 255;
+        osPrevHasErr = true;
+      }
+      else if (inString == "PROG")
+      {
+        if (osAppX < osAppN)
         {
-          doSystemInfoS();
-        }
-        else if (inString == "PANIC")
-        {
-          SerialAPI.println("OK");
-          osAbleToRun = false;
-          osState = 255;
-          osPrevHasErr = true;
-        }
-        else if (inString == "PROG")
-        {
-          if (osAppX < osAppN)
-          {
-            SerialAPI.println("OK");
-            osAppX++;
-          }
-          else
-          {
-            osAppX = 0;
-            SerialAPI.println("OK");
-          }
-        }
-        else if (inString == "RESET")
-        {
-          SerialAPI.println("Resetting Default Settings");
-          doSystemReset();
-        }
-        else if (inString == "HELP")
-        {
-          SerialAPI.println("You may use Available Commands:");
-          SerialAPI.println("ENUM - Show System Information");
-          SerialAPI.println("PANIC - Make a system panic");
-          SerialAPI.println("PROG - Change Active Application");
-          SerialAPI.println("RESET - Reset the system");
-          doSystemVersionS();
-        }
-        else if (inString == "READ")
-        {
-          doSensorValueS();
+          Serial.println("OK");
+          osAppX++;
         }
         else
         {
-          SerialAPI.print("[Serial] Unknown Command: ");
-          SerialAPI.print(inString);
-          SerialAPI.println(".");
+          osAppX = 0;
+          Serial.println("OK");
         }
-        inString = ""; // Clear buffer
+      }
+      else if (inString == "RESET")
+      {
+        Serial.println("Resetting Default Settings");
+        doSystemReset();
+      }
+      else if (inString == "HELP")
+      {
+        Serial.println("You may use Available Commands:");
+        Serial.println("ENUM - Show System Information");
+        Serial.println("PANIC - Make a system panic");
+        Serial.println("PROG - Change Active Application");
+        Serial.println("RESET - Reset the system");
+        doSystemVersionS();
+      }
+      else if (inString == "READ")
+      {
+        doSensorValueS();
       }
       else
       {
-        // Not receiving full message, continue counting.
-        inString += (char)inChar;
+        Serial.print("[Serial] Unknown Command: ");
+        Serial.print(inString);
+        Serial.println(".");
       }
+      inString = ""; // Clear buffer
+    }
+    else
+    {
+      // Not receiving full message, continue counting.
+      inString += (char)inChar;
     }
   }
 }
@@ -445,29 +415,29 @@ extern "C" void proc_network(void *arg)
 // Sensor Value Serial Output
 void doSensorValueS()
 {
-  SerialAPI.print("Acceleration X: ");
-  SerialAPI.print(mpuacclx);
-  SerialAPI.print(", Y: ");
-  SerialAPI.print(mpuaccly);
-  SerialAPI.print(", Z: ");
-  SerialAPI.print(mpuacclz);
-  SerialAPI.println(" m/s^2");
+  Serial.print("Acceleration X: ");
+  Serial.print(mpuacclx);
+  Serial.print(", Y: ");
+  Serial.print(mpuaccly);
+  Serial.print(", Z: ");
+  Serial.print(mpuacclz);
+  Serial.println(" m/s^2");
 
-  SerialAPI.print("Rotation X: ");
-  SerialAPI.print(mpugyrox);
-  SerialAPI.print(", Y: ");
-  SerialAPI.print(mpugyroy);
-  SerialAPI.print(", Z: ");
-  SerialAPI.print(mpugyroz);
-  SerialAPI.println(" rad/s");
+  Serial.print("Rotation X: ");
+  Serial.print(mpugyrox);
+  Serial.print(", Y: ");
+  Serial.print(mpugyroy);
+  Serial.print(", Z: ");
+  Serial.print(mpugyroz);
+  Serial.println(" rad/s");
 
-  SerialAPI.print("Temperature: ");
-  SerialAPI.print(mputempc);
-  SerialAPI.println(" degC");
+  Serial.print("Temperature: ");
+  Serial.print(mputempc);
+  Serial.println(" degC");
 
-  SerialAPI.print("Obstacle Distance: ");
-  SerialAPI.print(distance);
-  SerialAPI.println(" cm");
+  Serial.print("Obstacle Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
 }
 
 int doSystemTest()
@@ -482,8 +452,8 @@ int doSystemTest()
   uint16_t time = millis();
   tft.fillScreen(ST77XX_BLACK);
   time = millis() - time;
-  SerialAPI.print("draw function take time: ");
-  SerialAPI.println(time, DEC);
+  Serial.print("draw function take time: ");
+  Serial.println(time, DEC);
   delay(500);
 
   // large block of text
@@ -495,39 +465,12 @@ int doSystemTest()
   tftPrintTest();
   delay(4000);
 
-  // a single pixel
-  tft.drawPixel(tft.width() / 2, tft.height() / 2, ST77XX_GREEN);
-  delay(500);
-
-  // line draw test
-  testlines(ST77XX_YELLOW);
-  delay(500);
-
   // optimized lines
   testfastlines(ST77XX_RED, ST77XX_BLUE);
   delay(500);
 
-  testdrawrects(ST77XX_GREEN);
-  delay(500);
-
-  testfillrects(ST77XX_YELLOW, ST77XX_MAGENTA);
-  delay(500);
-
   tft.fillScreen(ST77XX_BLACK);
-  testfillcircles(10, ST77XX_BLUE);
-  testdrawcircles(10, ST77XX_WHITE);
-  delay(500);
-
-  testroundrects();
-  delay(500);
-
-  testtriangles();
-  delay(500);
-
-  mediabuttons();
-  delay(500);
-
-  SerialAPI.println("System test done.");
+  Serial.println("System test done.");
   delay(1000);
 
   return 0;
@@ -539,10 +482,12 @@ void setup()
   // Initialize Serial Communication
   // This should be fixed port for Tx1/Rx1(PA9/PA10).
   // ESP8266 Software serial will be initialized after system test and have a check.
-  SerialAPI.begin(SYSBAUD);
-  SerialAPI.println("Early console at PA9 and PA10 with 9600 baud rate.");
-  SerialAPI.println("[ DEVICE INITIALIZE START ]");
-  SerialAPI.println("Setting basic Ports...");
+  Serial.setTx(SYS_TX);
+  Serial.setRx(SYS_RX);
+  Serial.begin(SYSBAUD);
+  Serial.println("Early console at PA9 and PA10 with 9600 baud rate.");
+  Serial.println("[ DEVICE INITIALIZE START ]");
+  Serial.println("Setting basic Ports...");
   // Digital Pins Initialization, only key input and LED should be initialized.
   pinMode(LED0, OUTPUT);
   pinMode(KEY1, INPUT);
@@ -551,7 +496,7 @@ void setup()
   pinMode(KEY4, INPUT);
   digitalWrite(LED0, LOW); // Indicate the system is working now
   // Early LCD Initialization
-  SerialAPI.println("Initializing LCD Device...");
+  Serial.println("Initializing LCD Device...");
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
   // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
   // may end up with a black screen some times, or all the time.
@@ -559,13 +504,13 @@ void setup()
   tft.initR(INITR_144GREENTAB); // Initialize 1.44 inch TFT screen with ST7735
   // TODO: Make a simple bootloader splash screen here, instead of boring serial outputs.
   // MPU6050 Sensor communication establish
-  SerialAPI.println("Searching MPU6050...");
+  Serial.println("Searching MPU6050...");
   delay(10); // Wait for I2C stabilize
   if (!mpu.begin())
   {
     // The MPU6050 connection should be established with an address of 0x68
     // If not established, tell the user system is not available to use.
-    SerialAPI.println("[ ERROR ] No MPU6050 Device found!");
+    Serial.println("[ ERROR ] No MPU6050 Device found!");
     while (1)
     {
       // TODO: Since the TFT Display is initialized, we can display some kind of error code here.
@@ -573,12 +518,17 @@ void setup()
     }
   }
   // If everything is ok, load the basic system parameter and roll out the setup phase.
-  SerialAPI.println("MPU6050 Communication OK.");
-  SerialAPI.println("Loading System Parameters...");
+  Serial.println("MPU6050 Communication OK.");
+  Serial.println("Loading System Parameters...");
   doSystemReset();
-  SerialAPI.println("[ DEVICE INITIALIZE FINISH ]");
-  SerialAPI.println("Code by MuTong233 at https://mygensou.net/ All rights reserved.");
-  SerialAPI.println("[ EARLY SYSTEM BOOTLOADER FINISH ]");
+  Serial.println("[ DEVICE INITIALIZE FINISH ]");
+  Serial.println("Code by MuTong233 at https://mygensou.net/ All rights reserved.");
+  Serial.println("[ EARLY SYSTEM BOOTLOADER FINISH ]");
+  Serial.println("[ SYSTEM TEST IN PROGRESS ]");
+  doSystemVersionS();
+  osState = doSystemTest();
+  Serial.println(osState);
+  Serial.println("[ SYSTEM TEST COMPLETED ]");
 }
 
 // Main code here, to run repeatedly:
@@ -587,64 +537,40 @@ void loop()
   // Now we are in the GensouRTOS environment, we need to do some preparation to start system.
   // Print out the build info and test the system to ensure it meets the standard condition.
   // When in production, reduce non-necessary test phase to save time and space.
-  SerialAPI.println("[ SYSTEM TEST IN PROGRESS ]");
-  doSystemVersionS();
-  if (!osPrevHasErr)
-  {
-    // If this is normal restart or fresh boot, do the system test
-    // and determine if the system has problem.
-    osState = doSystemTest();
-  }
-  else
-  {
-    SerialAPI.println("System has a previous error detected.");
-    SerialAPI.println("If an error code is set, should be reported here.");
-    // If a programming bug found, there will be no error code but error bit is set.
-    // In this situation, code exectution should be stop to prevent fault.
-    osAbleToRun = false;
-    // TODO: If recoverable, load the previous setting value and start the system.
-    // TODO: Require a standalone save-state handler.
-  }
-  // Check if the system failed, otherwise start code execution.
   if (osState != 0)
   {
+    // Check if the system failed, otherwise start code execution.
     // TODO: Print out the error code on the screen.
-    SerialAPI.print("System Test failed with an error code ");
-    SerialAPI.println(osState);
+    Serial.print("System Test failed with an error code ");
+    Serial.println(osState);
     // In case of an hardware-attack, set the execution bit to false.
     osAbleToRun = false;
-    SerialAPI.println("[ SYSTEM HALTED ]");
+    Serial.println("[ SYSTEM HALTED ]");
     while (1)
     {
       delay(10);
     }
   }
-  SerialAPI.println("System Test successfully completed.");
-  // SerialAPI.println("Initializing Network Connection...");
-  // osNetSerialAPI.begin(OSBAUD);
-  // SerialAPI.println("Initialized.");
-  // TODO: Network connection check.
-  SerialAPI.println("[ MULTI THREAD CODE EXECUTION ]");
-  uint16_t time = millis();
-  SerialAPI.print("System uptime: ");
-  SerialAPI.println(time, DEC);
-  osAbleToRun = true;
-  if (osAbleToRun)
+  else
   {
-    // Schedule to run threads in async mode
-    // Actually we need to manage priority by ourselves as the scheduler
-    // only provides basic thread management like a RTOS but not real RTOS.
-    coop_sched_thread(proc_worker, "thrd_1", THREAD_STACK_SIZE, (void *)1);
-    coop_sched_thread(proc_serial, "thrd_2", THREAD_STACK_SIZE, (void *)1);
-    coop_sched_thread(proc_systemui, "thrd_3", THREAD_STACK_SIZE, (void *)1);
-    coop_sched_thread(proc_input, "thrd_4", THREAD_STACK_SIZE, (void *)1);
-    // Start the service
-    coop_sched_service();
-    // Normally those threads won't exit because they are running in a loop.
-    // If there is a problem, the system must tell user there is something wrong.
-    SerialAPI.println("[ CODE EXECUTION TERMINATED ]");
+    // Serial.println("Initializing Network Connection...");
+    // osNetSerial.begin(OSBAUD);
+    // Serial.println("Initialized.");
+    // TODO: Network connection check.
+    osAbleToRun = true;
+    if (osAbleToRun)
+    {
+      // Schedule to run threads in async mode
+      // Actually we need to manage priority by ourselves as the scheduler
+      // only provides basic thread management like a RTOS but not real RTOS.
+      coop_sched_thread(proc_worker, "thrd_1", THREAD_STACK_SIZE, (void *)1);
+      coop_sched_thread(proc_serial, "thrd_2", THREAD_STACK_SIZE, (void *)1);
+      coop_sched_thread(proc_systemui, "thrd_3", THREAD_STACK_SIZE, (void *)1);
+      coop_sched_thread(proc_input, "thrd_4", THREAD_STACK_SIZE, (void *)1);
+      // Start the service
+      coop_sched_service();
+    }
   }
-  SerialAPI.println("[ RESTARTING IN PROGRESS ]");
 }
 
 /*
@@ -654,56 +580,6 @@ void loop()
   And most of them only runs at the system test not the final OS
   So it's important to delete them after development complete.
 */
-void testlines(uint16_t color)
-{
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = 0; x < tft.width(); x += 6)
-  {
-    tft.drawLine(0, 0, x, tft.height() - 1, color);
-    delay(0);
-  }
-  for (int16_t y = 0; y < tft.height(); y += 6)
-  {
-    tft.drawLine(0, 0, tft.width() - 1, y, color);
-    delay(0);
-  }
-
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = 0; x < tft.width(); x += 6)
-  {
-    tft.drawLine(tft.width() - 1, 0, x, tft.height() - 1, color);
-    delay(0);
-  }
-  for (int16_t y = 0; y < tft.height(); y += 6)
-  {
-    tft.drawLine(tft.width() - 1, 0, 0, y, color);
-    delay(0);
-  }
-
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = 0; x < tft.width(); x += 6)
-  {
-    tft.drawLine(0, tft.height() - 1, x, 0, color);
-    delay(0);
-  }
-  for (int16_t y = 0; y < tft.height(); y += 6)
-  {
-    tft.drawLine(0, tft.height() - 1, tft.width() - 1, y, color);
-    delay(0);
-  }
-
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = 0; x < tft.width(); x += 6)
-  {
-    tft.drawLine(tft.width() - 1, tft.height() - 1, x, 0, color);
-    delay(0);
-  }
-  for (int16_t y = 0; y < tft.height(); y += 6)
-  {
-    tft.drawLine(tft.width() - 1, tft.height() - 1, 0, y, color);
-    delay(0);
-  }
-}
 
 // TODO: This function should be transferred into a general one.
 // TODO: Only for error handler or demostration purpose.
@@ -728,91 +604,6 @@ void testfastlines(uint16_t color1, uint16_t color2)
   for (int16_t x = 0; x < tft.width(); x += 5)
   {
     tft.drawFastVLine(x, 0, tft.height(), color2);
-  }
-}
-
-void testdrawrects(uint16_t color)
-{
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = 0; x < tft.width(); x += 6)
-  {
-    tft.drawRect(tft.width() / 2 - x / 2, tft.height() / 2 - x / 2, x, x, color);
-  }
-}
-
-void testfillrects(uint16_t color1, uint16_t color2)
-{
-  tft.fillScreen(ST77XX_BLACK);
-  for (int16_t x = tft.width() - 1; x > 6; x -= 6)
-  {
-    tft.fillRect(tft.width() / 2 - x / 2, tft.height() / 2 - x / 2, x, x, color1);
-    tft.drawRect(tft.width() / 2 - x / 2, tft.height() / 2 - x / 2, x, x, color2);
-  }
-}
-
-void testfillcircles(uint8_t radius, uint16_t color)
-{
-  for (int16_t x = radius; x < tft.width(); x += radius * 2)
-  {
-    for (int16_t y = radius; y < tft.height(); y += radius * 2)
-    {
-      tft.fillCircle(x, y, radius, color);
-    }
-  }
-}
-
-void testdrawcircles(uint8_t radius, uint16_t color)
-{
-  for (int16_t x = 0; x < tft.width() + radius; x += radius * 2)
-  {
-    for (int16_t y = 0; y < tft.height() + radius; y += radius * 2)
-    {
-      tft.drawCircle(x, y, radius, color);
-    }
-  }
-}
-
-void testtriangles()
-{
-  tft.fillScreen(ST77XX_BLACK);
-  uint16_t color = 0xF800;
-  int t;
-  int w = tft.width() / 2;
-  int x = tft.height() - 1;
-  int y = 0;
-  int z = tft.width();
-  for (t = 0; t <= 15; t++)
-  {
-    tft.drawTriangle(w, y, y, x, z, x, color);
-    x -= 4;
-    y += 4;
-    z -= 4;
-    color += 100;
-  }
-}
-
-void testroundrects()
-{
-  tft.fillScreen(ST77XX_BLACK);
-  uint16_t color = 100;
-  int i;
-  int t;
-  for (t = 0; t <= 4; t += 1)
-  {
-    int x = 0;
-    int y = 0;
-    int w = tft.width() - 2;
-    int h = tft.height() - 2;
-    for (i = 0; i <= 16; i += 1)
-    {
-      tft.drawRoundRect(x, y, w, h, 5, color);
-      x += 2;
-      y += 3;
-      w -= 4;
-      h -= 6;
-      color += 1100;
-    }
-    color += 100;
   }
 }
 
@@ -855,26 +646,4 @@ void tftPrintTest()
   tft.print(millis() / 1000);
   tft.setTextColor(ST77XX_WHITE);
   tft.print(" seconds.");
-}
-
-void mediabuttons()
-{
-  // play
-  tft.fillScreen(ST77XX_BLACK);
-  tft.fillRoundRect(25, 10, 78, 60, 8, ST77XX_WHITE);
-  tft.fillTriangle(42, 20, 42, 60, 90, 40, ST77XX_RED);
-  delay(500);
-  // pause
-  tft.fillRoundRect(25, 90, 78, 60, 8, ST77XX_WHITE);
-  tft.fillRoundRect(39, 98, 20, 45, 5, ST77XX_GREEN);
-  tft.fillRoundRect(69, 98, 20, 45, 5, ST77XX_GREEN);
-  delay(500);
-  // play color
-  tft.fillTriangle(42, 20, 42, 60, 90, 40, ST77XX_BLUE);
-  delay(50);
-  // pause color
-  tft.fillRoundRect(39, 98, 20, 45, 5, ST77XX_RED);
-  tft.fillRoundRect(69, 98, 20, 45, 5, ST77XX_RED);
-  // play color
-  tft.fillTriangle(42, 20, 42, 60, 90, 40, ST77XX_GREEN);
 }

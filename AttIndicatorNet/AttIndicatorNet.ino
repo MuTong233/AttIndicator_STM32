@@ -26,11 +26,23 @@
   The general ESP8266 module ESP-01 has a 8Mbit(1MB) flash space.
   And it's dedicated for the network stuff.
   So, plenty of space... for now.
-  I don't think we can do some "thread" stuff on this.
-  But if we can, I will try my best to achieve that.
+  I don't think we can do some "thread" stuff on this. EDIT: yes we can it's stronger
+  But if we can, I will try my best to achieve that. EDIT: than STM32F1 lol read datasheet
   Coding format should follow the main application.
 
 */
+
+// Multithread Configuration
+#include <coop_threads.h>
+#define CONFIG_IDLE_CB_ALT
+#define THREAD_STACK_SIZE 0x400U // Use 0x400U as the stack size for ESP8266
+#endif
+#define CONFIG_MAX_THREADS 6 // Increase some number for better event handling
+// May reduce RAM usage...? But we have plenty of RAM anyway
+// #define CONFIG_NOEXIT_STATIC_THREADS 1
+#if !CONFIG_OPT_IDLE
+#error CONFIG_OPT_IDLE need to be configured
+#endif
 
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>

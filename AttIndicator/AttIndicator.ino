@@ -15,17 +15,11 @@
 // Multithread Configuration
 #include <coop_threads.h>
 #define CONFIG_IDLE_CB_ALT
-#if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
-#define THREAD_STACK_SIZE 0x400U
-#elif ARDUINO_ARCH_AVR
-#define THREAD_STACK_SIZE 0x80U
-#else
-#define THREAD_STACK_SIZE 0 // By default, use 0x100U as the THREAD_STACK_SIZE for STM32 platform
+#define THREAD_STACK_SIZE 0x200U // Use 0x200U as the stack size for STM32F1
 #endif
-// Problem check
-#if CONFIG_MAX_THREADS < 5
-#error CONFIG_MAX_THREADS >= 5 is required
-#endif
+#define CONFIG_MAX_THREADS 6 // Increase some number for better event handling
+// May reduce RAM usage...? But we have plenty of RAM anyway
+// #define CONFIG_NOEXIT_STATIC_THREADS 1
 #if !CONFIG_OPT_IDLE
 #error CONFIG_OPT_IDLE need to be configured
 #endif

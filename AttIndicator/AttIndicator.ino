@@ -11,8 +11,9 @@
 */
 
 // Begin of the code.
+// Software libraries
 // Multithread Configuration
-#include "coop_threads.h"
+#include <coop_threads.h>
 #define CONFIG_IDLE_CB_ALT
 #if defined(ARDUINO_ARCH_ESP32) || defined(ARDUINO_ARCH_ESP8266)
 #define THREAD_STACK_SIZE 0x400U
@@ -28,6 +29,8 @@
 #if !CONFIG_OPT_IDLE
 #error CONFIG_OPT_IDLE need to be configured
 #endif
+// Serial based on software(built-in)
+#include <SoftwareSerial.h>
 
 // Hardware libraries
 // LCD Configuration with SPI support
@@ -44,25 +47,34 @@
 // Ports Macro definition
 // Not const char anymore yay
 // Available Ports can be found in the src dir.
-#define KEY1 PA0
-#define KEY2 PA1
-#define KEY3 PA2
-#define KEY4 PA3
-#define TFT_SCLK PA4
-#define TFT_CS PA5
-#define TFT_RST PA6
-#define TFT_DC PA7
-#define TFT_MOSI PA8
-#define US_TRIG PB8
-#define US_ECHO PB9
+// Hardware I2C Port can be found on PB6: CL PB7:DA
+#define KEY1 PA4
+#define KEY2 PA5
+#define KEY3 PA6
+#define KEY4 PA7
+#define TFT_SCLK PB3
+#define TFT_CS PB4
+#define TFT_RST PA15
+#define TFT_DC PA2
+#define TFT_MOSI PB5
+#define US_TRIG PA0
+#define US_ECHO PA1
 #define LED0 PC13
+#define ESP_TX PB10
+#define ESP_RX PB11
+#define SYS_TX PA9
+#define SYS_RX PA10
 
 // The GensouRTOS Runtime version, also represent as the Application version.
 // Used for OTA Update and other various ways.
 // Structure should follow Major.Minor.Debug style like 1.00.00
 #define OSVER "1.00.07"
+#define SYSBAUD 9600
+#define OSBAUD 115200
 
 // Device Structure build
+// ESP8266 Network Software Serial Connection
+SoftwareSerial osNetSerial(ESP_RX, ESP_TX);
 // For ST7735-based displays, we will use this call
 // Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
@@ -358,7 +370,7 @@ extern "C" void proc_serial(void *arg)
     // TODO: This thread should handle all of the serial communication.
     // TODO: Any serial data receiving or sending should be finished in this thread.
     // TODO: It should use less hardware interrupt as it may disrupt the system working.
-    // Below Section is for Serial Communication.
+    // Below Section is for USB Serial Communication.
     while (Serial.available() > 0)
     {
       // Create a place to hold the incoming message
@@ -429,7 +441,16 @@ extern "C" void proc_serial(void *arg)
 }
 
 // TODO: ESP8266 External Data Transfer Thread
-// TODO: or in case of an out of disk space situation, an external W25Q80 Data Intepretter.
+// TODO: Finish ESP8266 part and establish stable connection with STM32.
+// TODO: All end-user interface should be finished in ESP8266 flash.
+extern "C" void proc_network(void *arg)
+{
+  // TODO: Finish ESP8266 part
+  osNetSerial.print("AT");
+  osNetSerial.print("AT+CWMODE=3");
+  osNetSerial.print("AT+CIPMUX=1");
+  coop_idle(1000);
+}
 
 // Sensor Value Serial Output
 void doSensorValueS()
@@ -527,10 +548,10 @@ void setup()
 {
   // Initialize Serial Communication
   // This should be fixed port for Tx1/Rx1(PA9/PA10).
-  // Or if ESP8266 OTA Update Module is attached this can be 2 or 3 etc.
-  Serial.setRx(PA10);
-  Serial.setTx(PA9);
-  Serial.begin(9600);
+  // ESP8266 Software serial will be initialized after system test and have a check.
+  Serial.setRx(SYS_RX);
+  Serial.setTx(SYS_TX);
+  Serial.begin(SYSBAUD);
   Serial.println("Early console at PA9 and PA10 with 9600 baud rate.");
   Serial.println("[ DEVICE INITIALIZE START ]");
   Serial.println("Setting basic Ports...");
@@ -610,12 +631,13 @@ void loop()
       delay(10);
     }
   }
-  else
-  {
-    Serial.println("System Test successfully completed.");
-    Serial.println("[ MULTI THREAD CODE EXECUTION ]");
-    osAbleToRun = true;
-  }
+  Serial.println("System Test successfully completed.");
+  Serial.println("Initializing Network Connection...");
+  osNetSerial.begin(OSBAUD);
+  Serial.println("Initialized.");
+  // TODO: Network connection check.
+  Serial.println("[ MULTI THREAD CODE EXECUTION ]");
+  osAbleToRun = true;
   if (osAbleToRun)
   {
     // Schedule to run threads in async mode

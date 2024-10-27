@@ -40,14 +40,14 @@
 // Ports Macro definition
 // Not const char anymore yay
 // Available Ports can be found in the src dir.
-// Hardware I2C Port can be found on PB6: CL PB7:DA
+// Hardware I2C Port can be found on PB6: CL PB7: DA
 #define KEY1 PA4
 #define KEY2 PA5
 #define KEY3 PA6
 #define KEY4 PA7
 #define TFT_SCLK PB3
-#define TFT_CS PB4
-#define TFT_RST PA15
+#define TFT_CS PA15
+#define TFT_RST PA3
 #define TFT_DC PA2
 #define TFT_MOSI PB5
 #define US_TRIG PA0
@@ -550,7 +550,7 @@ void setup()
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
   // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
   // may end up with a black screen some times, or all the time.
-  // tft.setSPISpeed(40000000);
+  tft.setSPISpeed(40000000);
   tft.initR(INITR_144GREENTAB); // Initialize 1.44 inch TFT screen with ST7735
   // TODO: Make a simple bootloader splash screen here, instead of boring serial outputs.
   // MPU6050 Sensor communication establish

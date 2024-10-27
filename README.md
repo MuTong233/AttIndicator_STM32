@@ -35,7 +35,16 @@ or use USB serial to make it connect to an existing wireless access point.
 1. Download Adafruit's MPU6050 and ST7735 Library
 2. Download Erick Simoes' Ultrasonic Library
 3. Download Piotr Stolarz's CoopThreads Library
-4. Compile
+4. Apply Patch
+5. Compile
+
+#### Patch
+
+This patch is needed for ST7735 to work on the STM32F1.
+
+https://github.com/adafruit/Adafruit-GFX-Library/pull/365/files
+
+https://github.com/adafruit/Adafruit-ST7735-Library/pull/156/files
 
 ## TODO List
 

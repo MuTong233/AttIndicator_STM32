@@ -39,13 +39,16 @@ or use USB serial to make it connect to an existing wireless access point.
 
 ## TODO List
 
-1. Real hardware testing.
+1. Real hardware testing. (This is always the first priority.)
 2. LCD Interface design.
 3. Key interactive functions.
 4. Data computing(vertical speed etc.).
 5. Data output format re-design.
 6. ESP8266 OTA support.
 7. Web interface design.
+8. PCB design and final product design.
+9. GensouRTOS framework cleanup and packaging.
+10. Try port the whole code framework to KEIL.
 
 ### Project GensouRTOS:
 

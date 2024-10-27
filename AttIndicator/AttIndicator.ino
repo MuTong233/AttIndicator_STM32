@@ -1,7 +1,7 @@
 /*
 
   MuTong233's [*] code
-  Using Arduino IDE cuz i'm lazy to learn uVision :cool:
+  Using Arduino IDE because I need to do "cross-platform" coding.
 
   The code is distributed under the GNU GPL-3.0-or-later open-source license.
   You may or already used the code, but when used, you must publish modified code as-is.

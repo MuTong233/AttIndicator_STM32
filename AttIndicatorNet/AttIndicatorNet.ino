@@ -34,10 +34,7 @@
 
 // Multithread Configuration
 #include <coop_threads.h>
-#define CONFIG_IDLE_CB_ALT
-#define THREAD_STACK_SIZE 0x400U // Use 0x400U as the stack size for ESP8266
-#endif
-#define CONFIG_MAX_THREADS 6 // Increase some number for better event handling
+#define THREAD_STACK_SIZE 0x200U // Use 0x200U as the stack size for ESP8266
 // May reduce RAM usage...? But we have plenty of RAM anyway
 // #define CONFIG_NOEXIT_STATIC_THREADS 1
 #if !CONFIG_OPT_IDLE

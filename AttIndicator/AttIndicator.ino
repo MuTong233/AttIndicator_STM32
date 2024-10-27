@@ -16,8 +16,7 @@
 #include <coop_threads.h>
 #define CONFIG_IDLE_CB_ALT
 #define THREAD_STACK_SIZE 0x200U // Use 0x200U as the stack size for STM32F1
-#endif
-#define CONFIG_MAX_THREADS 6 // Increase some number for better event handling
+#define CONFIG_MAX_THREADS 6     // Increase some number for better event handling
 // May reduce RAM usage...? But we have plenty of RAM anyway
 // #define CONFIG_NOEXIT_STATIC_THREADS 1
 #if !CONFIG_OPT_IDLE
@@ -90,7 +89,7 @@ unsigned int distance;
 float mpuacclx, mpuaccly, mpuacclz, mpugyrox, mpugyroy, mpugyroz, mputempc;
 
 // UART Buffer
-const unsigned int MAX_MESSAGE_LENGTH = 12;
+String inString = "";
 
 // For test purpose only
 float p = 3.1415926;
@@ -294,12 +293,6 @@ void doSystemVersionS()
   Serial.println(OSVER);
 }
 
-// String to Integer function (as the ARM Compiler doesn't support switch str yet.)
-constexpr unsigned int str2int(const char *str, int h = 0)
-{
-  return !str[h] ? 5381 : (str2int(str, h + 1) * 33) ^ str[h];
-}
-
 /* Application Main Threads Programming
    WARNING: DO NOT USE ANY SOFTWARE DELAY FUNCTION!!!
    WARNING: IF YOU WANT TO PAUSE THE THREAD FOR A BIT
@@ -312,6 +305,7 @@ extern "C" void proc_worker(void *arg)
   {
     doSensorUpdate(0);
     doSensorDataAnalyze();
+    coop_idle(20);
   }
 }
 
@@ -351,7 +345,7 @@ extern "C" void proc_input(void *arg)
     (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
     (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
     (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
-    coop_idle(5);
+    coop_idle(20);
   }
 }
 
@@ -368,37 +362,25 @@ extern "C" void proc_serial(void *arg)
     while (Serial.available() > 0)
     {
       // Create a place to hold the incoming message
-      static char message[MAX_MESSAGE_LENGTH];
-      static unsigned int message_pos = 0;
+      int inChar = Serial.read();
 
-      // Read the next available byte in the serial receive buffer
-      char inByte = Serial.read();
-
-      // Message coming in (check not terminating character) and guard for over message size
-      if (inByte != '\n' && (message_pos < MAX_MESSAGE_LENGTH - 1))
+      if (inChar == '\n')
       {
-        // Add the incoming byte to our message
-        message[message_pos] = inByte;
-        message_pos++;
-      }
-      // Full message received...
-      else
-      {
-        // Add null character to string
-        message[message_pos] = '\0';
+        // If full message received...
         // Check the message and do things.
-        switch (str2int(message))
+        if (inString == "ENUM")
         {
-        case str2int("ENUM"):
           doSystemInfoS();
-          break;
-        case str2int("PANIC"):
+        }
+        else if (inString == "PANIC")
+        {
           Serial.println("OK");
           osAbleToRun = false;
           osState = 255;
           osPrevHasErr = true;
-          break;
-        case str2int("PROG"):
+        }
+        else if (inString == "PROG")
+        {
           if (osAppX < osAppN)
           {
             Serial.println("OK");
@@ -409,26 +391,33 @@ extern "C" void proc_serial(void *arg)
             osAppX = 0;
             Serial.println("OK");
           }
-          break;
-        case str2int("RESET"):
+        }
+        else if (inString == "RESET")
+        {
           Serial.println("Resetting Default Settings");
           doSystemReset();
-          break;
-        case str2int("HELP"):
+        }
+        else if (inString == "HELP")
+        {
           Serial.println("You may use Available Commands:");
           Serial.println("ENUM - Show System Information");
           Serial.println("PANIC - Make a system panic");
           Serial.println("PROG - Change Active Application");
           Serial.println("RESET - Reset the system");
           doSystemVersionS();
-          break;
-        default:
+        }
+        else
+        {
           Serial.print("[Serial] Unknown Command: ");
-          Serial.print(message);
+          Serial.print(inString);
           Serial.println(".");
         }
-        // Reset for the next message
-        message_pos = 0;
+        inString = ""; // Clear buffer
+      }
+      else
+      {
+        // Not receiving full message, continue counting.
+        inString += (char)inChar;
       }
     }
   }
@@ -626,9 +615,9 @@ void loop()
     }
   }
   Serial.println("System Test successfully completed.");
-  Serial.println("Initializing Network Connection...");
-  osNetSerial.begin(OSBAUD);
-  Serial.println("Initialized.");
+  // Serial.println("Initializing Network Connection...");
+  // osNetSerial.begin(OSBAUD);
+  // Serial.println("Initialized.");
   // TODO: Network connection check.
   Serial.println("[ MULTI THREAD CODE EXECUTION ]");
   osAbleToRun = true;

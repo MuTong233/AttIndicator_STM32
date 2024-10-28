@@ -49,9 +49,9 @@ https://github.com/adafruit/Adafruit-ST7735-Library/pull/156/files
 ## TODO List
 
 1. Real hardware testing. (This is always the first priority.)
-2. LCD Interface design.
-3. Key interactive functions.
-4. Data computing(vertical speed etc.).
+2. ~~ LCD Interface design.~~
+3. ~~Key interactive functions.~~
+4. Algorithm(vertical speed etc.).
 5. Data output format re-design.
 6. ESP8266 OTA support.
 7. Web interface design.

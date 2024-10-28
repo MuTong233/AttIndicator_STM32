@@ -62,8 +62,8 @@
 // The GensouRTOS Runtime version, also represent as the Application version.
 // Used for OTA Update and other various ways.
 // Structure should follow Major.Minor.Debug style like 1.00.00
-#define OSVER "1.00.07"
-#define SYSBAUD 9600
+#define OSVER "1.00.12"
+#define SYSBAUD 38400
 #define OSBAUD 115200
 
 // Device Structure build
@@ -80,21 +80,15 @@ Adafruit_MPU6050 mpu;
 Ultrasonic ultrasonic(US_TRIG, US_ECHO);
 
 // Global Variants
-unsigned int osAppX = 0;
-unsigned int osAppN = 2;
-unsigned int osState = 0;
-unsigned int osIdleTime = 10000;
-unsigned int keyInput = 0;
-bool osAbleToRun = false;
-bool osPrevHasErr = false;
-unsigned int distance;
-float mpuacclx, mpuaccly, mpuacclz, mpugyrox, mpugyroy, mpugyroz, mputempc;
-
-// UART Buffer
-String inString = "";
-
-// For test purpose only
-float p = 3.1415926;
+unsigned int osAppX = 0;                                                    // Buffer for application id
+unsigned int osAppN = 3;                                                    // Total application number
+unsigned int osState = 0;                                                   // System status check
+unsigned int osIdleTime = 10;                                               // Wait X before systemui update
+unsigned int osIdleRel = 0;                                                 // Buffer for Idle count
+unsigned int keyInput = 0;                                                  // Buffer for key input, support multi-key input.
+unsigned int distance;                                                      // Buffer for Ultrasonic
+float mpuacclx, mpuaccly, mpuacclz, mpugyrox, mpugyroy, mpugyroz, mputempc; // Buffer for MPU6050
+String inString = "";                                                       // UART Buffer
 
 // Sensitive Settings
 // As we use standalone SR04 package we no longer have a ultrasonic sensitivity.
@@ -162,7 +156,6 @@ void doSetSensitive(int mpuband, int mpurang, int mpurana)
 void doSystemReset()
 {
   // TODO: Finish the configuration data structure.
-  osAbleToRun = true;
   osAppX = 0;
   doSetSensitive(4, 1, 2);
 }
@@ -219,7 +212,7 @@ int doSensorCheck()
 void doSensorDataAnalyze()
 {
   // TODO: Based on MPU6050 Data, calculate possible attitude and climb rate etc.
-  // TODO: Need real hardware testing, waiting for board arrival.
+  // TODO: Algorithm design :)
 }
 
 // System Info Serial Output
@@ -227,8 +220,6 @@ void doSystemInfoS()
 {
   // TODO: Finish the configuration data structure.
   Serial.println("Current Configuration:");
-  Serial.print("System Working: ");
-  Serial.println(osAbleToRun);
   Serial.print("Filter bandwidth set to: ");
   switch (mpu.getFilterBandwidth())
   {
@@ -286,6 +277,8 @@ void doSystemInfoS()
     Serial.println("+-16G");
     break;
   }
+  Serial.print("Running Application ID: ");
+  Serial.println(osAppX);
 }
 
 // Version Info Serial Output
@@ -295,10 +288,12 @@ void doSystemVersionS()
   Serial.println(OSVER);
 }
 
-/* Application Main Threads Programming
-   WARNING: DO NOT USE ANY SOFTWARE DELAY FUNCTION!!!
-   WARNING: IF YOU WANT TO PAUSE THE THREAD FOR A BIT
-   WARNING: USE coop_idle INSTEAD OF delay FUNCTION */
+/*
+  Application Main Threads Programming
+  WARNING: DO NOT USE ANY SOFTWARE DELAY FUNCTION!!!
+  WARNING: IF YOU WANT TO PAUSE THE THREAD FOR A BIT
+  WARNING: USE coop_idle INSTEAD OF delay FUNCTION
+*/
 
 // Thread 1: Main Worker for all computing related things
 extern "C" void proc_worker(void *arg)
@@ -309,30 +304,44 @@ extern "C" void proc_worker(void *arg)
 // Thread 2: System UI handler for all display output things
 extern "C" void proc_systemui(void *arg)
 {
-  // TODO: Make a user-friendly interface for end-user to use.
-  // TODO: This section should only handle TFT Output, or status detection.
-  // TODO: Input handler should be only handled in its belonged thread.
-  // TODO: Like Serial thread or Input thread.
-  testdrawtext("System UI under construction, Please use Serial to control this device. Serial started with TX on PA9, RX on PA10, Baud Rate 9600", ST77XX_WHITE);
+  if (osAppX == 0)
+  {
+    doAppBasic();
+  }
+  else if (osAppX == 1)
+  {
+    doAppBasicUI();
+  }
+  else if (osAppX == 2)
+  {
+    doAppVersion();
+  }
+  else if (osIdleRel != osIdleTime)
+  {
+    tft.fillScreen(ST77XX_BLACK);
+    tft.setCursor(30, 60);
+    tft.setTextColor(ST77XX_YELLOW);
+    tft.setTextSize(1);
+    tft.println("Please Wait");
+  }
+  else
+  {
+    osState = 2;
+  }
 }
 
 // Thread 3: Input event handler
 extern "C" void proc_input(void *arg)
 {
-  (digitalRead(KEY1) == 1) ? keyInput = keyInput | 0x01 : keyInput = keyInput & 0x0e;
-  (digitalRead(KEY2) == 1) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
-  (digitalRead(KEY3) == 1) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
-  (digitalRead(KEY4) == 1) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
+  (digitalRead(KEY1) == 0) ? keyInput = keyInput | 0x01 : keyInput = keyInput & 0x0e;
+  (digitalRead(KEY2) == 0) ? keyInput = keyInput | 0x02 : keyInput = keyInput & 0x0d;
+  (digitalRead(KEY3) == 0) ? keyInput = keyInput | 0x04 : keyInput = keyInput & 0x0b;
+  (digitalRead(KEY4) == 0) ? keyInput = keyInput | 0x08 : keyInput = keyInput & 0x07;
 }
 
 // Thread 4: Serial Communication handler
 extern "C" void proc_serial(void *arg)
 {
-  // Ciallo
-  // TODO: This thread should handle all of the serial communication.
-  // TODO: Any serial data receiving or sending should be finished in this thread.
-  // TODO: It should use less hardware interrupt as it may disrupt the system working.
-  // Below Section is for USB Serial Communication.
   while (Serial.available() > 0)
   {
     // Create a place to hold the incoming message
@@ -349,9 +358,7 @@ extern "C" void proc_serial(void *arg)
       else if (inString == "PANIC")
       {
         Serial.println("OK");
-        osAbleToRun = false;
         osState = 255;
-        osPrevHasErr = true;
       }
       else if (inString == "PROG")
       {
@@ -438,6 +445,9 @@ void doSensorValueS()
   Serial.print("Obstacle Distance: ");
   Serial.print(distance);
   Serial.println(" cm");
+
+  Serial.print("Key Register: ");
+  Serial.println(keyInput);
 }
 
 int doSystemTest()
@@ -454,24 +464,13 @@ int doSystemTest()
   time = millis() - time;
   Serial.print("draw function take time: ");
   Serial.println(time, DEC);
-  delay(500);
-
-  // large block of text
-  tft.fillScreen(ST77XX_BLACK);
-  testdrawtext("This is a block of text test why the fuck original version takes a freaking long string that will make the flash full ok never mind it doesn't matter still getting f-ed by space", ST77XX_WHITE);
-  delay(1000);
-
-  // tft print function!
-  tftPrintTest();
-  delay(4000);
 
   // optimized lines
   testfastlines(ST77XX_RED, ST77XX_BLUE);
-  delay(500);
+  delay(1000);
 
   tft.fillScreen(ST77XX_BLACK);
   Serial.println("System test done.");
-  delay(1000);
 
   return 0;
 }
@@ -500,9 +499,17 @@ void setup()
   // SPI speed defaults to SPI_DEFAULT_FREQ defined in the library, you can override it here
   // Note that speed allowable depends on chip and quality of wiring, if you go too fast, you
   // may end up with a black screen some times, or all the time.
-  tft.setSPISpeed(40000000);
+  tft.setSPISpeed(240000000);
   tft.initR(INITR_144GREENTAB); // Initialize 1.44 inch TFT screen with ST7735
-  // TODO: Make a simple bootloader splash screen here, instead of boring serial outputs.
+  tft.fillScreen(ST77XX_BLACK);
+  tft.setCursor(25, 40);
+  tft.setTextColor(ST77XX_YELLOW);
+  tft.setTextSize(2);
+  tft.println("WELCOME");
+  tft.setCursor(8, 80);
+  tft.setTextColor(ST77XX_WHITE);
+  tft.setTextSize(1);
+  tft.println("System is coming up");
   // MPU6050 Sensor communication establish
   Serial.println("Searching MPU6050...");
   delay(10); // Wait for I2C stabilize
@@ -534,17 +541,22 @@ void setup()
 // Main code here, to run repeatedly:
 void loop()
 {
-  // Now we are in the GensouRTOS environment, we need to do some preparation to start system.
-  // Print out the build info and test the system to ensure it meets the standard condition.
-  // When in production, reduce non-necessary test phase to save time and space.
   if (osState != 0)
   {
     // Check if the system failed, otherwise start code execution.
-    // TODO: Print out the error code on the screen.
-    Serial.print("System Test failed with an error code ");
+    Serial.print("System failed with an error code ");
     Serial.println(osState);
-    // In case of an hardware-attack, set the execution bit to false.
-    osAbleToRun = false;
+    tft.fillScreen(ST77XX_BLUE);
+    tft.setCursor(0, 0);
+    tft.setTextColor(ST77XX_WHITE);
+    tft.setTextSize(1);
+    tft.println("!!! SYSTEM PANIC !!!");
+    tft.setTextSize(3);
+    tft.println(":(");
+    tft.setTextSize(1);
+    tft.setTextWrap(true);
+    tft.print("Your board has ran into a problem and need restart. The system failed with an error code of ");
+    tft.println(osState);
     Serial.println("[ SYSTEM HALTED ]");
     while (1)
     {
@@ -557,43 +569,27 @@ void loop()
     // osNetSerial.begin(OSBAUD);
     // Serial.println("Initialized.");
     // TODO: Network connection check.
-    osAbleToRun = true;
-    if (osAbleToRun)
+    // Schedule to run threads in async mode
+    // Actually we need to manage priority by ourselves as the scheduler
+    // only provides basic thread management like a RTOS but not real RTOS.
+    coop_sched_thread(proc_worker, "thrd_1", THREAD_STACK_SIZE, (void *)1);
+    coop_sched_thread(proc_input, "thrd_4", THREAD_STACK_SIZE, (void *)1);
+    coop_sched_thread(proc_serial, "thrd_2", THREAD_STACK_SIZE, (void *)1);
+    if (osIdleRel == osIdleTime)
     {
-      // Schedule to run threads in async mode
-      // Actually we need to manage priority by ourselves as the scheduler
-      // only provides basic thread management like a RTOS but not real RTOS.
-      coop_sched_thread(proc_worker, "thrd_1", THREAD_STACK_SIZE, (void *)1);
-      coop_sched_thread(proc_serial, "thrd_2", THREAD_STACK_SIZE, (void *)1);
       coop_sched_thread(proc_systemui, "thrd_3", THREAD_STACK_SIZE, (void *)1);
-      coop_sched_thread(proc_input, "thrd_4", THREAD_STACK_SIZE, (void *)1);
-      // Start the service
-      coop_sched_service();
     }
+    else
+    {
+      osIdleRel++;
+    }
+    // Start the service
+    coop_sched_service();
   }
 }
 
-/*
-  Following functions are used for TFT drawing test.
-  CAUTION: Not all function are useful for the system design.
-  They only provide a basic example of the system capability.
-  And most of them only runs at the system test not the final OS
-  So it's important to delete them after development complete.
-*/
-
-// TODO: This function should be transferred into a general one.
-// TODO: Only for error handler or demostration purpose.
-void testdrawtext(char *text, uint16_t color)
-{
-  tft.setCursor(0, 0);
-  tft.setTextColor(color);
-  tft.setTextWrap(true);
-  tft.print(text);
-}
-
-// TODO: Rest all function when tested in the real hardware
-// TODO: Make them all related to the UI design.
-// TODO: Following function are directly from example code.
+// Following functions are used for TFT drawing.
+// Screen check
 void testfastlines(uint16_t color1, uint16_t color2)
 {
   tft.fillScreen(ST77XX_BLACK);
@@ -607,43 +603,128 @@ void testfastlines(uint16_t color1, uint16_t color2)
   }
 }
 
-void tftPrintTest()
+// Data Indicator (Serial Replacement)
+void doAppBasic()
 {
-  tft.setTextWrap(false);
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setCursor(0, 30);
-  tft.setTextColor(ST77XX_RED);
-  tft.setTextSize(1);
-  tft.println("Hello World!");
-  float p = 3.1415926;
-  tft.setTextColor(ST77XX_YELLOW);
-  tft.setTextSize(2);
-  tft.println("Hello World!");
-  tft.setTextColor(ST77XX_GREEN);
-  tft.setTextSize(3);
-  tft.println("Hello World!");
-  tft.setTextColor(ST77XX_BLUE);
-  tft.setTextSize(4);
-  tft.print(1234.567);
-  delay(1500);
+  int i;
   tft.setCursor(0, 0);
-  tft.fillScreen(ST77XX_BLACK);
-  tft.setTextColor(ST77XX_WHITE);
-  tft.setTextSize(0);
-  tft.println("Hello World!");
+  tft.setTextColor(ST7735_WHITE);
+  tft.setTextWrap(true);
+  tft.setTextSize(2);
+  tft.print("BASIC");
+  tft.setCursor(0, 20);
   tft.setTextSize(1);
-  tft.setTextColor(ST77XX_GREEN);
-  tft.print(p, 6);
-  tft.println(" Want pi?");
-  tft.println(" ");
-  tft.print(8675309, HEX); // print 8,675,309 out in HEX!
-  tft.println(" Print HEX!");
-  tft.println(" ");
-  tft.setTextColor(ST77XX_WHITE);
-  tft.println("Sketch has been");
-  tft.println("running for: ");
-  tft.setTextColor(ST77XX_MAGENTA);
-  tft.print(millis() / 1000);
-  tft.setTextColor(ST77XX_WHITE);
-  tft.print(" seconds.");
+  for (i = 20; i != 50; i++)
+  {
+    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
+  }
+  tft.print("Accel X: ");
+  tft.print(mpuacclx);
+  tft.println(" m/s^2");
+  tft.print("Accel Y: ");
+  tft.print(mpuaccly);
+  tft.println(" m/s^2");
+  tft.print("Accel Z: ");
+  tft.print(mpuacclz);
+  tft.println(" m/s^2");
+  for (i = 50; i != 80; i++)
+  {
+    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
+  }
+  tft.print("Gyro X: ");
+  tft.print(mpugyrox);
+  tft.println(" rad/s");
+  tft.print("Gyro Y: ");
+  tft.print(mpugyroy);
+  tft.println(" rad/s");
+  tft.print("Gyro Z: ");
+  tft.print(mpugyroz);
+  tft.println(" rad/s");
+  for (i = 80; i != 110; i++)
+  {
+    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
+  }
+  tft.print("Temp: ");
+  tft.print(mputempc);
+  tft.println(" degC");
+
+  tft.print("Obstacle: ");
+  tft.print(distance);
+  tft.println(" cm");
+
+  tft.print("Key Register: ");
+  tft.println(keyInput);
+  tft.print("Uptime: ");
+  int uptime = millis() / 1000;
+  tft.print(uptime);
+  tft.println("s");
+  tft.setCursor(0, 110);
+  tft.println("Press < or > continue");
+  if (osIdleRel == osIdleTime)
+  {
+    doAppSelect();
+  }
+}
+
+// Main Attitude Indicator
+// TODO: Algorithm for attitude indicator :) HARDEST PART
+void doAppBasicUI()
+{
+  int i;
+  for (i = 0; i != 64; i++)
+  {
+    tft.drawFastHLine(0, i, 128, ST7735_BLUE);
+  }
+  tft.drawFastHLine(0, 64, 128, ST7735_WHITE);
+  for (i = 65; i != 129; i++)
+  {
+    tft.drawFastHLine(0, i, 128, 0xb2c0);
+  }
+
+  if (osIdleRel == osIdleTime)
+  {
+    doAppSelect();
+  }
+}
+
+// About system
+void doAppVersion()
+{
+  tft.setCursor(0, 0);
+  tft.setTextColor(ST7735_WHITE);
+  tft.setTextWrap(true);
+  tft.setTextSize(2);
+  tft.print("SYSTEM");
+  tft.setCursor(0, 20);
+  tft.setTextSize(1);
+  tft.println("Hardware: STM32F1");
+  tft.println("System: GensouRTOS");
+  tft.print("Version: ");
+  tft.println(OSVER);
+  tft.println("2024, Team MyGensou");
+  tft.println("All rights reserved.");
+  tft.setCursor(0, 110);
+  tft.println("Press < or > continue");
+
+  if (osIdleRel == osIdleTime)
+  {
+    doAppSelect();
+  }
+}
+
+// TODO: System Settings
+
+// Application Selector (General)
+void doAppSelect()
+{
+  unsigned int origApp = osAppX;
+  (keyInput == 1) ? osAppX-- : osAppX;
+  (keyInput == 2) ? osAppX++ : osAppX;
+  (osAppX == -1) ? osAppX = osAppN - 1 : osAppX;
+  (osAppX == osAppN) ? osAppX = 0 : osAppX;
+  if (osAppX != origApp)
+  {
+    tft.fillScreen(ST7735_BLACK);
+    osIdleRel = 0;
+  }
 }

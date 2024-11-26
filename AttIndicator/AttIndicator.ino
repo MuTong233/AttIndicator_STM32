@@ -518,10 +518,26 @@ void setup()
     // The MPU6050 connection should be established with an address of 0x68
     // If not established, tell the user system is not available to use.
     Serial.println("[ ERROR ] No MPU6050 Device found!");
+    osState = 38;
     while (1)
     {
       // TODO: Since the TFT Display is initialized, we can display some kind of error code here.
-      delay(100);
+          Serial.print("System failed with an error code ");
+          Serial.println(osState);
+          tft.fillScreen(ST77XX_BLUE);
+          tft.setCursor(0, 0);
+          tft.setTextColor(ST77XX_WHITE);
+          tft.setTextSize(1);
+          tft.println("!!! SYSTEM PANIC !!!");
+          tft.setTextSize(3);
+          tft.println(":(");
+          tft.setTextSize(1);
+          tft.setTextWrap(true);
+          tft.print("Your board has ran into a problem and need restart. The system failed with an error code of ");
+          tft.println(osState);
+          Serial.println("[ SYSTEM HALTED ]");
+          delay(10000);
+          while(1){}
     }
   }
   // If everything is ok, load the basic system parameter and roll out the setup phase.

@@ -34,8 +34,6 @@
 #include <Adafruit_MPU6050.h> // Hardware-specific library for MPU6050
 #include <Adafruit_Sensor.h>  // Core sensors library
 #include <Wire.h>             // General Wire Library
-// HC-SR04 Ultrasonic Distance Measure Device
-#include <Ultrasonic.h>
 
 // Ports Macro definition
 // Not const char anymore yay
@@ -62,7 +60,7 @@
 // The GensouRTOS Runtime version, also represent as the Application version.
 // Used for OTA Update and other various ways.
 // Structure should follow Major.Minor.Debug style like 1.00.00
-#define OSVER "1.00.12"
+#define OSVER "1.00.16"
 #define SYSBAUD 38400
 #define OSBAUD 115200
 
@@ -76,19 +74,17 @@ Adafruit_ST7735 tft = Adafruit_ST7735(&SPI_2, TFT_CS, TFT_DC, TFT_RST);
 // MPU6050 sensor uses I2C to communicate with the board
 // I2C use device number based detection, make sure I2C hardware port is reserved!
 Adafruit_MPU6050 mpu;
-// HC-SR04 Ultrasonic uses a time-gap method to tell user the detailed distance information.
-Ultrasonic ultrasonic(US_TRIG, US_ECHO);
 
 // Global Variants
 unsigned int osAppX = 0;                                                    // Buffer for application id
 unsigned int osAppN = 3;                                                    // Total application number
 unsigned int osState = 0;                                                   // System status check
-unsigned int osIdleTime = 10;                                               // Wait X before systemui update
+unsigned int osIdleTime = 2;                                                // Wait X before systemui update
 unsigned int osIdleRel = 0;                                                 // Buffer for Idle count
 unsigned int keyInput = 0;                                                  // Buffer for key input, support multi-key input.
-unsigned int distance;                                                      // Buffer for Ultrasonic
 float mpuacclx, mpuaccly, mpuacclz, mpugyrox, mpugyroy, mpugyroz, mputempc; // Buffer for MPU6050
 String inString = "";                                                       // UART Buffer
+bool osAppSw = true;                                                        // Application switchable flag
 
 // Sensitive Settings
 // As we use standalone SR04 package we no longer have a ultrasonic sensitivity.
@@ -179,7 +175,6 @@ void doSensorUpdate(int sta)
     mpugyroy = g.gyro.y;
     mpugyroz = g.gyro.z;
     mputempc = temp.temperature;
-    distance = ultrasonic.read();
     break;
   case 1:
     mpuacclx = a.acceleration.x;
@@ -193,9 +188,6 @@ void doSensorUpdate(int sta)
     break;
   case 3:
     mputempc = temp.temperature;
-    break;
-  case 4:
-    distance = ultrasonic.read();
     break;
   default:
     Serial.println("Invalid data passed into the sensor updater.");
@@ -298,31 +290,40 @@ void doSystemVersionS()
 // Thread 1: Main Worker for all computing related things
 extern "C" void proc_worker(void *arg)
 {
+  unsigned owo;
   doSensorUpdate(0);
+  if (osIdleRel == osIdleTime && osAppSw == true)
+  {
+    doAppSelect();
+    (osAppX == 0) ? doAppSelect() : delay(0) ;
+    (osAppX == 0) ? doAppSelect() : delay(0) ;
+    (osAppX == 0) ? doAppSelect() : delay(0) ;
+  }
 }
 
 // Thread 2: System UI handler for all display output things
 extern "C" void proc_systemui(void *arg)
 {
-  if (osAppX == 0)
+  if (osIdleRel != osIdleTime)
   {
+    osAppSw = false;
+    tft.fillScreen(ST77XX_BLACK);
+    osIdleRel++;
+  }
+  else if (osAppX == 0)
+  {
+    osAppSw = true;
     doAppBasic();
   }
   else if (osAppX == 1)
   {
+    osAppSw = true;
     doAppBasicUI();
   }
   else if (osAppX == 2)
   {
+    osAppSw = true;
     doAppVersion();
-  }
-  else if (osIdleRel != osIdleTime)
-  {
-    tft.fillScreen(ST77XX_BLACK);
-    tft.setCursor(30, 60);
-    tft.setTextColor(ST77XX_YELLOW);
-    tft.setTextSize(1);
-    tft.println("Please Wait");
   }
   else
   {
@@ -362,16 +363,9 @@ extern "C" void proc_serial(void *arg)
       }
       else if (inString == "PROG")
       {
-        if (osAppX < osAppN)
-        {
-          Serial.println("OK");
-          osAppX++;
-        }
-        else
-        {
-          osAppX = 0;
-          Serial.println("OK");
-        }
+        Serial.println("OK");
+        osAppX++;
+        doAppSelect();
       }
       else if (inString == "RESET")
       {
@@ -442,10 +436,6 @@ void doSensorValueS()
   Serial.print(mputempc);
   Serial.println(" degC");
 
-  Serial.print("Obstacle Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
-
   Serial.print("Key Register: ");
   Serial.println(keyInput);
 }
@@ -484,7 +474,7 @@ void setup()
   Serial.setTx(SYS_TX);
   Serial.setRx(SYS_RX);
   Serial.begin(SYSBAUD);
-  Serial.println("Early console at PA9 and PA10 with 9600 baud rate.");
+  Serial.println("Early console started.");
   Serial.println("[ DEVICE INITIALIZE START ]");
   Serial.println("Setting basic Ports...");
   // Digital Pins Initialization, only key input and LED should be initialized.
@@ -591,14 +581,7 @@ void loop()
     coop_sched_thread(proc_worker, "thrd_1", THREAD_STACK_SIZE, (void *)1);
     coop_sched_thread(proc_input, "thrd_4", THREAD_STACK_SIZE, (void *)1);
     coop_sched_thread(proc_serial, "thrd_2", THREAD_STACK_SIZE, (void *)1);
-    if (osIdleRel == osIdleTime)
-    {
-      coop_sched_thread(proc_systemui, "thrd_3", THREAD_STACK_SIZE, (void *)1);
-    }
-    else
-    {
-      osIdleRel++;
-    }
+    coop_sched_thread(proc_systemui, "thrd_3", THREAD_STACK_SIZE, (void *)1);
     // Start the service
     coop_sched_service();
   }
@@ -622,64 +605,76 @@ void testfastlines(uint16_t color1, uint16_t color2)
 // Data Indicator (Serial Replacement)
 void doAppBasic()
 {
-  int i;
+  // By repeatedly change transparency we can get around 250ms per frame (4 FPS)
+  // Refresh whole buffer will be too slow.
+  // A single char with bg will cost 2 ms and without bg it will be less than 1 ms
+  int fps = millis();
+  int drawtime = 0;
+  int uptime = millis() / 1000;
+  tft.setTextWrap(false);
+  tft.setTextColor(ST77XX_WHITE);
   tft.setCursor(0, 0);
-  tft.setTextColor(ST7735_WHITE);
-  tft.setTextWrap(true);
   tft.setTextSize(2);
   tft.print("BASIC");
-  tft.setCursor(0, 20);
   tft.setTextSize(1);
-  for (i = 20; i != 50; i++)
-  {
-    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
-  }
-  tft.print("Accel X: ");
-  tft.print(mpuacclx);
-  tft.println(" m/s^2");
-  tft.print("Accel Y: ");
-  tft.print(mpuaccly);
-  tft.println(" m/s^2");
-  tft.print("Accel Z: ");
-  tft.print(mpuacclz);
-  tft.println(" m/s^2");
-  for (i = 50; i != 80; i++)
-  {
-    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
-  }
-  tft.print("Gyro X: ");
-  tft.print(mpugyrox);
-  tft.println(" rad/s");
-  tft.print("Gyro Y: ");
-  tft.print(mpugyroy);
-  tft.println(" rad/s");
-  tft.print("Gyro Z: ");
-  tft.print(mpugyroz);
-  tft.println(" rad/s");
-  for (i = 80; i != 110; i++)
-  {
-    tft.drawFastHLine(0, i, 128, ST7735_BLACK);
-  }
-  tft.print("Temp: ");
-  tft.print(mputempc);
-  tft.println(" degC");
-
-  tft.print("Obstacle: ");
-  tft.print(distance);
-  tft.println(" cm");
-
-  tft.print("Key Register: ");
-  tft.println(keyInput);
-  tft.print("Uptime: ");
-  int uptime = millis() / 1000;
-  tft.print(uptime);
-  tft.println("s");
   tft.setCursor(0, 110);
   tft.println("Press < or > continue");
-  if (osIdleRel == osIdleTime)
-  {
-    doAppSelect();
-  }
+  tft.setCursor(0, 20);
+  tft.print("Accel X: ");
+  tft.setTextColor(0xffff00, 0x000000);
+  tft.print(mpuacclx);
+  tft.println(" m/s^2    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Accel Y: ");
+  tft.setTextColor(0xffffff, 0x000000);
+  tft.print(mpuaccly);
+  tft.println(" m/s^2    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Accel Z: ");
+  tft.setTextColor(0xffff00, 0x000000);
+  tft.print(mpuacclz);
+  tft.println(" m/s^2    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Gyro X: ");
+  tft.setTextColor(0xffffff, 0x000000);
+  tft.print(mpugyrox);
+  tft.println(" rad/s    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Gyro Y: ");
+  tft.setTextColor(0xffff00, 0x000000);
+  tft.print(mpugyroy);
+  tft.println(" rad/s    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Gyro Z: ");
+  tft.setTextColor(0xffffff, 0x000000);
+  tft.print(mpugyroz);
+  tft.println(" rad/s    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Temp: ");
+  tft.setTextColor(0xffff00, 0x000000);
+  tft.print(mputempc);
+  tft.println(" degC");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Key Register: ");
+  tft.setTextColor(0xffffff, 0x000000);
+  tft.print(keyInput);
+  tft.println("    ");
+  tft.setTextColor(ST77XX_WHITE);
+  tft.print("Uptime: ");
+  tft.setTextColor(0xffff00, 0x000000);
+  tft.print(uptime);
+  tft.println(" s    ");
+  tft.setTextColor(ST77XX_WHITE);
+  fps = millis() - fps;
+  drawtime = fps;
+  fps = 1000 / fps;
+  tft.print("TFT: ");
+  tft.setTextColor(0xffffff, 0x000000);
+  tft.print(fps);
+  tft.print(" fps (");
+  tft.print(drawtime);
+  tft.print(" ms)    ");
+  tft.setTextWrap(true);
 }
 
 // Main Attitude Indicator
@@ -695,11 +690,6 @@ void doAppBasicUI()
   for (i = 65; i != 129; i++)
   {
     tft.drawFastHLine(0, i, 128, 0xb2c0);
-  }
-
-  if (osIdleRel == osIdleTime)
-  {
-    doAppSelect();
   }
 }
 
@@ -721,11 +711,6 @@ void doAppVersion()
   tft.println("All rights reserved.");
   tft.setCursor(0, 110);
   tft.println("Press < or > continue");
-
-  if (osIdleRel == osIdleTime)
-  {
-    doAppSelect();
-  }
 }
 
 // TODO: System Settings
@@ -733,6 +718,7 @@ void doAppVersion()
 // Application Selector (General)
 void doAppSelect()
 {
+  if (osAppSw) {
   unsigned int origApp = osAppX;
   (keyInput == 1) ? osAppX-- : osAppX;
   (keyInput == 2) ? osAppX++ : osAppX;
@@ -741,6 +727,9 @@ void doAppSelect()
   if (osAppX != origApp)
   {
     tft.fillScreen(ST7735_BLACK);
+    Serial.print("Switching to App ");
+    Serial.println(osAppX);
+    osAppSw = false;
     osIdleRel = 0;
-  }
+  }}
 }

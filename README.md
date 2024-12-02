@@ -16,7 +16,6 @@ https://components101.com/microcontrollers/stm32f103c8t8-blue-pill-development-b
 Data will be shown on the 1.44-inch TFT screen with an interface that drawn by myself.
 And there will be key and serial handler to execute some actions like change the sensitivity or etc.
 The system used ST7735 as TFT controller and MPU6050 as main sensor.
-Also, a HC-SR04 is used to detect obstacle. This is an optional function.
 
 ## Sub-board Hardware Specification
 
@@ -29,6 +28,19 @@ https://www.esp8266.com/wiki/doku.php?id=esp8266-module-family
 This module is mainly used for firmware OTA and network stuff.
 Data will be shown in the web browser that can be accessed either by its own hotspot,
 or use USB serial to make it connect to an existing wireless access point.
+
+## [**EXPERIMENTAL**] Alternative support
+
+Board Information:
+Raspberry Pi Pico / Pico 2
+Detailed information can be found here:
+
+https://www.raspberrypi.com/documentation/microcontrollers/pico-series.html
+
+Tested working on real RP2350 hardware.
+
+Be aware that Arduino-pico currently does not support port re-assignment.
+Hardware specificed default ports need to be used as communication port.
 
 ## Get Started
 
@@ -83,5 +95,5 @@ wrote is an valuable experience for myself.
 
 ## Special Thanks to:
 
-Adafruit, Erick Simoes, Piotr Stolarz and STM32duino community and all library providers!
+Adafruit, Piotr Stolarz, Raspberry Pi and STM32duino community and all library providers!
 Without those effort, the project can't develop as smooth as possible.
